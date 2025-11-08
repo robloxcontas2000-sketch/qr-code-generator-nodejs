@@ -1,0 +1,94 @@
+// Bot Ana TechView - WhatsApp usando Baileys
+import makeWASocket, { useMultiFileAuthState, DisconnectReason } from "@whiskeysockets/baileys"
+import Pino from "pino"
+
+async function startBot() {
+  const { state, saveCreds } = await useMultiFileAuthState("session")
+  const sock = makeWASocket({
+    logger: Pino({ level: "silent" }),
+    printQRInTerminal: true,
+    auth: state,
+  })
+
+  sock.ev.on("creds.update", saveCreds)
+
+  sock.ev.on("connection.update", ({ connection, lastDisconnect }) => {
+    if (connection === "close") {
+      const shouldReconnect =
+        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+      if (shouldReconnect) startBot()
+    } else if (connection === "open") {
+      console.log("🤖 Ana TechView está online!")
+    }
+  })
+
+  sock.ev.on("messages.upsert", async (msg) => {
+    const m = msg.messages[0]
+    if (!m.message || m.key.fromMe) return
+
+    const from = m.key.remoteJid
+    const body =
+      m.message.conversation ||
+      m.message.extendedTextMessage?.text ||
+      ""
+
+    const name = m.pushName || "cliente"
+
+    if (body.toLowerCase() === "menu" || body.toLowerCase() === "oi") {
+      const menu = `
+🌸 Olá ${name}! Eu sou a *Ana*, assistente virtual da *TechView* 💬
+
+Escolha uma das opções abaixo:
+1️⃣ Suporte para Celular 📱
+2️⃣ Contatos 📩
+3️⃣ Política de Privacidade 🛡️
+
+Digite o número da opção desejada.
+`
+      await sock.sendMessage(from, { text: menu })
+    } else if (body === "1") {
+      await sock.sendMessage(from, {
+        text: `📱 *Suporte de Celular*
+
+Por favor, digite o modelo do seu dispositivo.
+Exemplo: Galaxy A15, iPhone 13, Redmi Note 12, etc.`,
+      })
+    } else if (body.toLowerCase().includes("galaxy a15")) {
+      await sock.sendMessage(from, {
+        text: `📲 Você selecionou *Galaxy A15*.
+
+Escolha o problema:
+- Não liga ⚡
+- Não carrega 🔋
+- Tela preta 🖤
+- Outros problemas 📞`,
+      })
+    } else if (body === "2") {
+      await sock.sendMessage(from, {
+        text: `📩 *Contactos TechView:*
+
+Email: techviewqh@gmail.com
+WhatsApp: +351 934 264 305`,
+      })
+    } else if (body === "3") {
+      await sock.sendMessage(from, {
+        text: `🛡️ *Política de Privacidade — TechView*
+
+A TechView é uma empresa dedicada à tecnologia e inovação, oferecendo suporte, informações e serviços relacionados a produtos eletrônicos e soluções digitais.
+
+As informações trocadas com nossos atendentes são usadas apenas para melhorar o atendimento e nunca são compartilhadas sem autorização.
+
+📩 Contactos:
+Email: techviewqh@gmail.com
+WhatsApp: +351 934 264 305
+TikTok: tiktok.com/@techviewqh`,
+      })
+    } else {
+      await sock.sendMessage(from, {
+        text: "Desculpe, não entendi 😅 — digite *menu* para ver as opções.",
+      })
+    }
+  })
+}
+
+startBot()
